@@ -2,9 +2,10 @@ const asyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
 const jwt = require("jsonwebtoken");
 const { response } = require("express");
-
+const bcrypt = require("bcryptjs");
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+  return jwt.sign({ id }, 
+  process.env.JWT_SECRET, { expiresIn: "1d" });
 };
 
 //regesteruser
@@ -74,7 +75,104 @@ const registerUser = asyncHandler(async (req, res) => {
 
 //loginuser
 const loginUser = asyncHandler(async (req, res) => {
-  res.send("login USer");
+  const {email, password} = req.body;
+  //validate request
+  if (!email || !password){
+    res.status(400);
+    throw new Error("Please add email and password");
+  }
+
+  //check if user exists
+  const user = await User.findOne({email});
+  if (!user){
+    res.status(400);
+    throw new Error("User not found, please register");
+  }
+  //user exists, check if password is correct
+  const passwordIsCorrect = await bcrypt.compare(password, user.password);
+  
+  //generate token
+  const token = generateToken(user._id);
+  //send httponly
+  res.cookie("token", token, {
+    path: "/",
+    httpOnly: true,
+    expires: new Date(Date.now() + 1000 * 86400),
+    // sameSite: "none",
+    // secure: true
+  });
+  
+  if (user && passwordIsCorrect){
+    const { _id, name, email, photo, phone, bio } = user;
+    res.status(201).json({
+      _id,
+      name,
+      email,
+      photo,
+      phone,
+      bio,
+      token,
+    });
+  }
+  else{
+    res.status(400);
+    throw new Error("Invalid email or password");
+  }
 });
 
-module.exports = { registerUser, loginUser };
+//logout user
+const logoutUser = asyncHandler(async(req, res) => {
+  res.cookie("token", "", {
+    path: "/",
+    httpOnly: true,
+    expires: new Date(0),
+    sameSite: "none",
+    secure: true
+  });
+  return res.status(200).json({message: "Successfully logged out"});
+})
+
+//get user data 
+const getUser = asyncHandler(async(req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (user){
+    const { _id, name, email, photo, phone, bio } = user;
+    res.status(200).json({
+      _id,
+      name,
+      email,
+      photo,
+      phone,
+      bio,
+    });
+  } else {
+    res.status(400);
+    throw new Error("User not found");
+
+  }
+
+  
+});
+
+
+//get login status
+const loggedInStatus = asyncHandler(async(req, res) => {
+  const token = req.cookies.token;
+  if (!token){
+    return res.json(false);
+  }
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    if (verified) {
+      return res.json(true);
+    }
+    else{
+      return res.json(false);
+    }
+  } catch (error) {
+    return res.json(false);
+  }
+});
+
+module.exports = { registerUser, loginUser, logoutUser, getUser, loggedInStatus };
