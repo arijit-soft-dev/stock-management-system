@@ -173,7 +173,7 @@ const loggedInStatus = asyncHandler(async(req, res) => {
     return res.json(false);
   }
 });
-
+//update user
 const updateUser = asyncHandler(async(req, res) => {
   const user = await User.findById(req.user._id);
   if (user){
@@ -201,4 +201,36 @@ const updateUser = asyncHandler(async(req, res) => {
 
 });
 
-module.exports = { registerUser, loginUser, logoutUser, getUser, loggedInStatus, updateUser };
+//change password
+const changePassword = asyncHandler(async(req, res) => {
+  const user = await User.findById(req.user._id);
+  if (user){
+    const {oldPassword, password} = req.body;
+    if (!oldPassword || !password){
+      res.status(400);
+      throw new Error("Please add old and new password");
+    }
+    else{
+    const passwordIsCorrect = await bcrypt.compare(oldPassword, user.password);
+    if (user && passwordIsCorrect){
+      user.password = password;
+      await user.save();
+      res.status(200).send("Password change successful");
+    }
+    else{
+      res.status(400);
+      throw new Error("Old password is incorrect");
+    }
+  }
+
+  }
+  else{
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+
+});
+
+module.exports = { registerUser, 
+  changePassword, loginUser, logoutUser, getUser, loggedInStatus, updateUser };
