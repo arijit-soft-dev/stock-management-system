@@ -255,7 +255,7 @@ const forgotPassword = asyncHandler(async(req, res) => {
     userId: user._id,
     token: hashedToken,
     createdAt: Date.now(),
-    expiresIn: Date.now() + 30 * (60 * 1000)
+    expiresAt: Date.now() + 30 * (60 * 1000)
   }).save()
   // construct reset url
   const restUrl = `${process.env.FRONTEND_URL}/resetpassword/${resetToken}`
@@ -267,7 +267,18 @@ const forgotPassword = asyncHandler(async(req, res) => {
   <a href=${restUrl} clicktracking=off>${restUrl}</a>
 
   <p>If you did not request this email, please ignore it.</p>
-  `
+  `;
+  const subject = "Password reset request";
+  const send_to = user.email;
+  const sent_from = process.env.EMAIL_USER;
+
+  try {
+    await sendEmail(subject, message, send_to, sent_from);
+    res.status(200).json({success: true, message: "Reset email sent"});
+  } catch (error) {
+    res.status(500).json({success: false, message: "Email not sent please try again :("});
+  }
+
   res.send("Forgot password");
 });
 
