@@ -2,6 +2,8 @@ const asyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const Token = require("../models/tokenModel");
+const crypto = require("crypto");
 const generateToken = (id) => {
   return jwt.sign({ id }, 
   process.env.JWT_SECRET, { expiresIn: "1d" });
@@ -232,5 +234,44 @@ const changePassword = asyncHandler(async(req, res) => {
 
 });
 
+//forgot password
+const forgotPassword = asyncHandler(async(req, res) => {
+  const {email} = req.body;
+  const user = await User.findOne({email});
+  if (!user){
+    res.status(404);
+    throw new Error("User does not exist");
+  }
+  //generate token
+  let resetToken = crypto.randomBytes(32).toString("hex") + user._id;
+  //hash token before saving to db
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+    console.log(hashedToken);
+  // save token to db
+  await new Token({
+    userId: user._id,
+    token: hashedToken,
+    createdAt: Date.now(),
+    expiresIn: Date.now() + 30 * (60 * 1000)
+  }).save()
+  // construct reset url
+  const restUrl = `${process.env.FRONTEND_URL}/resetpassword/${resetToken}`
+
+  // reset Email 
+  const message = `
+  <h2>Hello ${user.name}</h2>
+  <p>Please click on the following link to reset your password:</p>
+  <a href=${restUrl} clicktracking=off>${restUrl}</a>
+
+  <p>If you did not request this email, please ignore it.</p>
+  `
+  res.send("Forgot password");
+});
+
 module.exports = { registerUser, 
-  changePassword, loginUser, logoutUser, getUser, loggedInStatus, updateUser };
+  changePassword, 
+  forgotPassword,
+  loginUser, logoutUser, getUser, loggedInStatus, updateUser };
